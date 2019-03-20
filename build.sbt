@@ -1,4 +1,4 @@
-val scalaV = "2.12.6"
+val scalaV = "2.12.8"
 val specs2V = "4.3.2"
 
 libraryDependencies ++= Seq(
