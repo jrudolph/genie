@@ -2,6 +2,7 @@ val scalaV = "2.12.8"
 val specs2V = "4.3.2"
 
 libraryDependencies ++= Seq(
+  "com.chuusai" %% "shapeless" % "2.3.3",
   "org.specs2" %% "specs2-core" % specs2V % "test"
 )
 
