@@ -72,16 +72,55 @@ object DistinctValues {
     Mutate { (_, random) => distinct.randomly(random) }
 }
 
+trait Genetics {
+  type GenT
+  type ResultT
+
+  // FIXME: name
+  case class Evaluation(
+      generation:       Int,
+      genotype:         GenT,
+      parent1:          GenT,
+      parent2:          GenT,
+      evaluationResult: ResultT,
+      fitness:          Double
+  ) {
+    def parents: Iterable[GenT] = parent1 :: parent2 :: Nil
+  }
+
+  case class Generation(
+      generation:  Int,
+      evaluations: Seq[Evaluation]
+  ) {
+    val evaluationsByFitness = evaluations.sortBy(-_.fitness)
+
+    def top(n: Int): Seq[Evaluation] = evaluationsByFitness.take(n)
+  }
+}
+
 class GenieSpec extends Specification {
   case class Age(age: Int)
   object Age {
     implicit val intRange: IntRange[Age] = IntRange[Age](0, 80, Age(_))
   }
 
+  sealed trait Kind
+  object Kind {
+    case object Elephant extends Kind
+    case object Mole extends Kind
+    case object Giraffe extends Kind
+
+    implicit val kindValues: DistinctValues[Kind] =
+      DistinctValues(Set(Elephant, Mole, Giraffe))
+  }
+
   case class Params(
       a: Age,
-      b: String
+      b: Kind
   )
+  object Params {
+
+  }
 
   ""
 }
