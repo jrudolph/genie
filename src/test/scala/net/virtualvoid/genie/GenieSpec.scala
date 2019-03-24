@@ -5,11 +5,42 @@ import shapeless._
 
 import scala.util.Random
 
+trait Sample[T] {
+  def apply(random: Random): T
+}
+object Sample {
+  def apply[T](c: Sample[T]): Sample[T] = c
+
+  def create[T](random: Random)(implicit c: Sample[T]): T = c(random)
+
+  implicit val perElementForHNil: Sample[HNil] = Sample(_ => HNil)
+  implicit def perElementForHCons[H, T <: HList](implicit hCreate: Sample[H], tCreate: Sample[T]): Sample[H :: T] =
+    Sample { random =>
+      hCreate(random) :: tCreate(random)
+    }
+
+  trait WithGeneric[T, R] {
+    def get(implicit rCreate: Sample[R]): Sample[T]
+  }
+  def generic[T](implicit tGen: Generic[T]): WithGeneric[T, tGen.Repr] = new WithGeneric[T, tGen.Repr] {
+    def get(implicit rCreate: Sample[tGen.Repr]): Sample[T] =
+      Sample(random => tGen.from(rCreate(random)))
+  }
+
+  implicit def sampleIntRangeRandomly[T](implicit range: IntRange[T]): Sample[T] =
+    Sample { random => range.sample(random) }
+  implicit def sampleDistinctValueRandomly[T](implicit distinct: DistinctValues[T]): Sample[T] =
+    Sample { random => distinct.sample(random) }
+}
+
 trait Mutate[T] {
   def apply(t: T, random: Random): T
 }
 object Mutate {
   def apply[T](m: Mutate[T]): Mutate[T] = m
+  def withRate[T](m: Mutate[T])(implicit rate: MutationRate): Mutate[T] =
+    Mutate((t, random) => if (random.nextDouble() < rate.probability) m(t, random) else t)
+
   def mutate[T](t: T, random: Random)(implicit m: Mutate[T]): T = m(t, random)
 
   implicit val perElementForHNil: Mutate[HNil] = Mutate((_, _) => HNil)
@@ -20,8 +51,16 @@ object Mutate {
       }
     }
 
-  def generic[T, R](implicit tGen: Generic.Aux[T, R], rCross: Mutate[R]): Mutate[T] =
-    Mutate((t, random) => tGen.from(rCross(tGen.to(t), random)))
+  trait WithGeneric[T, R] {
+    def get(implicit rMutate: Mutate[R]): Mutate[T]
+  }
+  def generic[T](implicit tGen: Generic[T]): WithGeneric[T, tGen.Repr] = new WithGeneric[T, tGen.Repr] {
+    def get(implicit rMutate: Mutate[tGen.Repr]): Mutate[T] =
+      Mutate((t, random) => tGen.from(rMutate(tGen.to(t), random)))
+  }
+
+  implicit def mutateBySampling[T](implicit sample: Sample[T], rate: MutationRate): Mutate[T] =
+    Mutate.withRate { (_, random) => sample(random) }
 }
 
 trait Crossover[T] {
@@ -40,36 +79,37 @@ object Crossover {
       (h1 :: t1, h2 :: t2)
     }
 
-  def generic[T, R](implicit tGen: Generic.Aux[T, R], rCross: Crossover[R]): Crossover[T] =
-    Crossover { (t1, t2, random) =>
-      val (n1, n2) = rCross(tGen.to(t1), tGen.to(t2), random)
-      (tGen.from(n1), tGen.from(n2))
-    }
+  trait WithGeneric[T, R] {
+    def get(implicit rCross: Crossover[R]): Crossover[T]
+  }
+  def generic[T](implicit tGen: Generic[T]): WithGeneric[T, tGen.Repr] = new WithGeneric[T, tGen.Repr] {
+    def get(implicit rCross: Crossover[tGen.Repr]): Crossover[T] =
+      Crossover { (t1, t2, random) =>
+        val (n1, n2) = rCross(tGen.to(t1), tGen.to(t2), random)
+        (tGen.from(n1), tGen.from(n2))
+      }
+  }
 
-  def swap[T](swapProb: Double = 0.5): Crossover[T] =
+  implicit def swap[T] /*(swapProb: Double = 0.5)*/ : Crossover[T] =
     Crossover { (t1, t2, random) =>
-      if (random.nextDouble() < swapProb) (t2, t1)
+      if (random.nextDouble() < 0.5) (t2, t1)
       else (t1, t2)
     }
+
+  def disable[T]: Crossover[T] = Crossover((t1, t2, _) => (t1, t2))
 }
 
+case class MutationRate(probability: Double)
+
 case class IntRange[T](from: Int, until: Int, create: Int => T) {
-  def randomly(random: Random): T =
+  def sample(random: Random): T =
     create(from + random.nextInt(until - from))
-}
-object IntRange {
-  implicit def mutateRandomly[T](implicit range: IntRange[T]): Mutate[T] =
-    Mutate { (_, random) => range.randomly(random) }
 }
 
 case class DistinctValues[T](set: Set[T]) {
   private val ordered = set.toVector
-  def randomly(random: Random): T =
+  def sample(random: Random): T =
     ordered(random.nextInt(ordered.size))
-}
-object DistinctValues {
-  implicit def mutateRandomly[T](implicit distinct: DistinctValues[T]): Mutate[T] =
-    Mutate { (_, random) => distinct.randomly(random) }
 }
 
 trait Genetics {
@@ -114,12 +154,31 @@ class GenieSpec extends Specification {
       DistinctValues(Set(Elephant, Mole, Giraffe))
   }
 
-  case class Params(
-      a: Age,
-      b: Kind
-  )
-  object Params {
+  sealed trait Color
+  object Color {
+    case object Orange extends Color
+    case object Pink extends Color
+    case object Green extends Color
 
+    implicit val colorValues: DistinctValues[Color] =
+      DistinctValues(Set(Orange, Pink, Green))
+  }
+
+  case class Creature(
+      age:   Age,
+      kind:  Kind,
+      color: Color
+  )
+  object Creature {
+    implicit val mutationRate = MutationRate(0.05)
+    //    implicit val kindCross = Crossover.swap[Kind]()
+    //    implicit val colorCross = Crossover.swap[Color]()
+    //    implicit val AgeCross = Crossover.swap[Age]()
+
+    //implicitly[Crossover[Kind]]
+    implicit val creatureCreation = Sample.generic[Creature].get
+    implicit val creatureMutation = Mutate.generic[Creature].get
+    implicit val creatureCrossover = Crossover.generic[Creature].get
   }
 
   ""
