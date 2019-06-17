@@ -1,6 +1,6 @@
 package net.virtualvoid.genie.tsp
 
-import net.virtualvoid.genie.{ Crossover, IntRange, Sample }
+import net.virtualvoid.genie.{ Crossover, IntRange, Mutate, Sample }
 
 import scala.annotation.tailrec
 
@@ -42,7 +42,7 @@ trait TSP {
       }._2
     }
   }
-  implicit val intRanges: Vector[IntRange[Int]] = (numCities to 1 by -1).map(num => IntRange(0, num, identity)).toVector
+  implicit val intRanges: Vector[IntRange[Int]] = IntRange(0, 1, identity) +: ((numCities - 1) to 1 by -1).map(num => IntRange(0, num, identity)).toVector
   implicit def samplePath: Sample[Path] =
     Sample { random =>
       Path(intRanges.map(_.sample(random)))
@@ -58,5 +58,16 @@ trait TSP {
       (Path(fstChild), Path(sndChild))
     }
 
-  //implicit val mutatePath: Mutate[Path] =
+  def perElementMutationRate: Double = 0.01
+  implicit val mutatePath: Mutate[Path] =
+    Mutate { (path, random) =>
+      val indices = path.vertexIndices.zipWithIndex.map {
+        case (i, idx) =>
+          if (random.nextDouble() < perElementMutationRate)
+            intRanges(idx).sample(random)
+          else
+            i
+      }
+      Path(indices)
+    }
 }

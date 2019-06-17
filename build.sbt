@@ -30,3 +30,5 @@ paradoxMaterialTheme in Compile := {
 paradoxProperties ++= Map(
   "github.base_url" -> (paradoxMaterialTheme in Compile).value.properties.getOrElse("repo", "")
 )
+
+fork in run := true

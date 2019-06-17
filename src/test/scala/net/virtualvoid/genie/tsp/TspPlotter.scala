@@ -31,7 +31,7 @@ trait TspPlotter { self: TSP =>
     (x, y)
   }
 
-  def plotPathTo(path: Path, file: File): Unit = {
+  def plotPath(path: Path, fileName: String): Unit = {
     val im = new BufferedImage(plotDimensions._1, plotDimensions._2, BufferedImage.TYPE_INT_RGB)
     val g2d = im.getGraphics.asInstanceOf[Graphics2D]
     g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
@@ -46,7 +46,6 @@ trait TspPlotter { self: TSP =>
     var first = true
     path.pathCities.foreach { city =>
       val point = posOf(city)
-      println(point)
       g2d.fill(new Rectangle2D.Double(point._1 - citySize / 2, point._2 - citySize / 2, citySize, citySize))
       if (first) {
         first = false
@@ -58,6 +57,6 @@ trait TspPlotter { self: TSP =>
 
     g2d.dispose()
 
-    ImageIO.write(im, "png", file)
+    ImageIO.write(im, "png", new File(fileName))
   }
 }
