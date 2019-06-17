@@ -20,18 +20,21 @@ trait TSP {
   case class Path(vertexIndices: Vector[Int]) {
     lazy val pathCities: Seq[City] = {
       @tailrec def rec(remainingPath: Vector[Int], remainingCities: Vector[City], reversePath: List[City]): Seq[City] =
-        if (remainingPath.isEmpty) reversePath.reverse.toVector
-        else {
+        if (remainingPath.isEmpty) {
+          require(reversePath.size == numCities)
+          reversePath.reverse.toVector
+        } else {
           val selected = remainingPath.head
-          val newPath = cities(selected) :: reversePath
+          val newPath = remainingCities(selected) :: reversePath
           val newRemainingPath = remainingPath.tail
           val newRemainingCities = remainingCities.take(selected) ++ remainingCities.drop(selected + 1)
+          require(newRemainingPath.size == remainingPath.size - 1)
           rec(newRemainingPath, newRemainingCities, newPath)
         }
 
       rec(vertexIndices, cities, Nil)
     }
-    def length: Double = {
+    lazy val length: Double = {
       val fst = pathCities.head
       pathCities.tail.foldLeft((fst, 0d)) { (state, nextCity) =>
         val newDist = state._2 + distance(state._1, nextCity)
